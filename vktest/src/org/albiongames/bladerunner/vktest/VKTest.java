@@ -62,9 +62,8 @@ public class VKTest extends Activity
         alertDialog.show();
     }
 
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
+    public VKTest()
+    {
         try
         {
             Class.forName("org.postgresql.Driver");
@@ -72,37 +71,42 @@ public class VKTest extends Activity
         catch (ClassNotFoundException ex)
         {
             Log.d("PSQL", ex.toString());
-            showError(ex.toString());
+//            showError(ex.toString());
         }
+    }
+
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
         setContentView(R.layout.vktest);
 
         questionView = (TextView)findViewById(R.id.textHeader);
         listView = (ListView)findViewById(R.id.list);
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener(){
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener()
+        {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id)
             {
                 Log.d("onItemClick", "Position = " + String.valueOf(position) + ", id = " + String.valueOf(id));
 
-                Connection conn = getConnection();
-                if (conn != null)
+                String query = "INSERT into vk_session_answer (session_id, question_id, answer_id) values (" +
+                        String.valueOf(sessionId) + ", " +
+                        String.valueOf(questionId) + ", " +
+                        String.valueOf(idList.get(position)) + ")";
+                try
                 {
-                    String query = "INSERT into vk_session_answer (session_id, question_id, answer_id) values (" +
-                            String.valueOf(sessionId) + ", " +
-                            String.valueOf(questionId) + ", " +
-                            String.valueOf(idList.get(position)) + ")";
-                    try
-                    {
-                        Statement st = conn.createStatement();
-                        st.execute(query);
+                    Connection conn = getConnection();
+                    Statement st = conn.createStatement();
+                    st.execute(query);
+                    conn.close();
 
-                        retrieve();
-                    }
-                    catch (SQLException ex)
-                    {
-                        Log.d("PSQL", ex.getLocalizedMessage());
-                    }
                 }
+                catch (SQLException ex)
+                {
+                    Log.d("PSQL", ex.getLocalizedMessage());
+                    showError(ex.getLocalizedMessage());
+                }
+
+                retrieve();
             }
         });
 
@@ -118,67 +122,65 @@ public class VKTest extends Activity
             questionId = 0;
             sessionId = 0;
 
-            Connection conn = getConnection();
-            if (conn != null)
+            boolean found = false;
+            boolean error = true;
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            String deviceId = prefs.getString("deviceId", "1");
+
+            String subquery = "select SA.session_id, SA.question_id from vk_session_answer SA, vk_session SS where SA.session_id = SS.id and SS.device_id = " + deviceId;
+            String query = "select Q.id AS qid, S.id as sid, Q.text from vk_question Q, vk_session S, vk_session_question SQ where " +
+                        "S.device_id = " + deviceId + " and " +
+                        "S.status = 'A' and " +
+                        "Q.id = SQ.question_id and " +
+                        "S.id = SQ.session_id and " +
+                        "(S.id, Q.id) not in (" + subquery + ") order by SQ.qtime ASC";
+
+            try
             {
-                boolean found = false;
-                try
+                Connection conn = getConnection();
+                Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery(query);
+
+                while (rs.next())
                 {
-                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+                    questionId = rs.getInt("qid");
+                    sessionId = rs.getInt("sid");
 
-                    String deviceId = prefs.getString("deviceId", "1");
-                    String query = "select SA.session_id, SA.question_id from vk_session_answer SA, vk_session SS where SA.session_id = SS.id and SS.device_id = " + deviceId;
+                    questionView.setText("Вопрос: " + rs.getString("text") + "\n\nВыберите ответ:");
 
-                    Statement st = conn.createStatement();
-                    ResultSet rs = st.executeQuery("select Q.id AS qid, S.id as sid, Q.text from vk_question Q, vk_session S, vk_session_question SQ where " +
-                            "S.device_id = " + deviceId + " and " +
-                            "S.status = 'A' and " +
-                            "Q.id = SQ.question_id and " +
-                            "S.id = SQ.session_id and " +
-                            "(S.id, Q.id) not in (" + query + ") order by SQ.qtime ASC");
-
-                    while (rs.next())
+                    ResultSet rs2 = st.executeQuery("select id, text from vk_answer where question_id = " + String.valueOf(rs.getInt("qid")));
+                    while (rs2.next())
                     {
-                        questionId = rs.getInt("qid");
-                        sessionId = rs.getInt("sid");
-
-                        questionView.setText("Вопрос: " + rs.getString("text") + "\n\nВыберите ответ:");
-
-                        ResultSet rs2 = st.executeQuery("select id, text from vk_answer where question_id = " + String.valueOf(rs.getInt("qid")));
-                        while (rs2.next())
-                        {
-                            idList.add(rs2.getInt("id"));
-                            nameList.add(rs2.getString("text"));
-                        }
-
-                        found = true;
-
-                        break;
+                        idList.add(rs2.getInt("id"));
+                        nameList.add(rs2.getString("text"));
                     }
-                }
-                catch (Throwable ex)
-                {
-                    Log.d("PSQL", ex.getLocalizedMessage());
-                    showError(ex.getLocalizedMessage());
-                }
 
-                ListAdapter adapter = new ArrayAdapter<String>(this, R.layout.list_item, nameList);
-                listView.setAdapter(adapter);
+                    found = true;
 
-                if (!found)
-                {
-                    questionView.setText("Ждём вопроса");
-                    timer.start();
+                    break;
                 }
+                conn.close();
+                error = false;
             }
-            else
+            catch (Throwable ex)
             {
-                questionView.setText("Ошибка соединения с сервером");
+                Log.d("PSQL", ex.getLocalizedMessage());
+                showError(ex.getLocalizedMessage());
             }
+
+            ListAdapter adapter = new ArrayAdapter<String>(this, R.layout.list_item, nameList);
+            listView.setAdapter(adapter);
+
+            if (!error && !found)
+            {
+                questionView.setText("Ждём вопроса");
+                timer.start();
+            }
+
         }
     }
 
-    private Connection getConnection()
+    private Connection getConnection() throws SQLException
     {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
@@ -191,17 +193,8 @@ public class VKTest extends Activity
         Properties props = new Properties();
         props.setProperty("user", user);
         props.setProperty("password", passwd);
-        Connection conn = null;
-        try
-        {
-            conn = DriverManager.getConnection(url, props);
-        }
-        catch (Throwable ex)
-        {
-            Log.d("PSQL", ex.getLocalizedMessage());
-            showError(ex.getLocalizedMessage());
-        }
-
+        DriverManager.setLoginTimeout(5);
+        Connection conn = DriverManager.getConnection(url, props);
         return conn;
     }
 
