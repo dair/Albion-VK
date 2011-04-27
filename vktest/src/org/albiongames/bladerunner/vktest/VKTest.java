@@ -1,23 +1,23 @@
 package org.albiongames.bladerunner.vktest;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ListActivity;
 import android.content.Intent;
-import android.database.DataSetObserver;
+import android.content.SharedPreferences;
+import android.database.*;
 
 import java.sql.*;
 
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.*;
-import android.widget.ArrayAdapter;
-import android.widget.ListAdapter;
-import android.widget.ListView;
-import android.widget.TextView;
+import android.widget.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.sql.SQLException;
+import java.util.*;
 
 /**
  * Created by IntelliJ IDEA.
@@ -26,9 +26,41 @@ import java.util.Properties;
  * Time: 7:13 PM
  * To change this template use File | Settings | File Templates.
  */
-public class VKTest extends ListActivity {
-
+public class VKTest extends Activity
+{
+    public static final String PREFS_NAME = "BladerunnerPrefs";
     private List<String> nameList = new ArrayList<String>();
+    private List<Integer> idList = new ArrayList<Integer>();
+    int questionId = 0;
+    int sessionId = 0;
+
+    TextView questionView = null;
+    ListView listView = null;
+
+    CountDownTimer timer = new CountDownTimer(1000, 1000) {
+        @Override
+        public void onTick(long l) {
+            // do nothing
+        }
+
+        @Override
+        public void onFinish() {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    retrieve();
+                }
+            });
+        }
+    };
+
+    public void showError(String error)
+    {
+        AlertDialog alertDialog;
+        alertDialog = new AlertDialog.Builder(this).create();
+        alertDialog.setTitle("Ошибка");
+        alertDialog.setMessage(error);
+        alertDialog.show();
+    }
 
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -40,36 +72,153 @@ public class VKTest extends ListActivity {
         catch (ClassNotFoundException ex)
         {
             Log.d("PSQL", ex.toString());
+            showError(ex.toString());
         }
+
+        setContentView(R.layout.vktest);
+
+        questionView = (TextView)findViewById(R.id.textHeader);
+        listView = (ListView)findViewById(R.id.list);
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener(){
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id)
+            {
+                Log.d("onItemClick", "Position = " + String.valueOf(position) + ", id = " + String.valueOf(id));
+
+                Connection conn = getConnection();
+                if (conn != null)
+                {
+                    String query = "INSERT into vk_session_answer (session_id, question_id, answer_id) values (" +
+                            String.valueOf(sessionId) + ", " +
+                            String.valueOf(questionId) + ", " +
+                            String.valueOf(idList.get(position)) + ")";
+                    try
+                    {
+                        Statement st = conn.createStatement();
+                        st.execute(query);
+
+                        retrieve();
+                    }
+                    catch (SQLException ex)
+                    {
+                        Log.d("PSQL", ex.getLocalizedMessage());
+                    }
+                }
+            }
+        });
+
+    }
+
+    private void retrieve()
+    {
+        synchronized (timer)
+        {
+            Log.d("PSQL", "retrieve() called");
+            nameList.clear();
+            idList.clear();
+            questionId = 0;
+            sessionId = 0;
+
+            Connection conn = getConnection();
+            if (conn != null)
+            {
+                boolean found = false;
+                try
+                {
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+                    String deviceId = prefs.getString("deviceId", "1");
+                    String query = "select SA.session_id, SA.question_id from vk_session_answer SA, vk_session SS where SA.session_id = SS.id and SS.device_id = " + deviceId;
+
+                    Statement st = conn.createStatement();
+                    ResultSet rs = st.executeQuery("select Q.id AS qid, S.id as sid, Q.text from vk_question Q, vk_session S, vk_session_question SQ where " +
+                            "S.device_id = " + deviceId + " and " +
+                            "S.status = 'A' and " +
+                            "Q.id = SQ.question_id and " +
+                            "S.id = SQ.session_id and " +
+                            "(S.id, Q.id) not in (" + query + ") order by SQ.qtime ASC");
+
+                    while (rs.next())
+                    {
+                        questionId = rs.getInt("qid");
+                        sessionId = rs.getInt("sid");
+
+                        questionView.setText("Вопрос: " + rs.getString("text") + "\n\nВыберите ответ:");
+
+                        ResultSet rs2 = st.executeQuery("select id, text from vk_answer where question_id = " + String.valueOf(rs.getInt("qid")));
+                        while (rs2.next())
+                        {
+                            idList.add(rs2.getInt("id"));
+                            nameList.add(rs2.getString("text"));
+                        }
+
+                        found = true;
+
+                        break;
+                    }
+                }
+                catch (Throwable ex)
+                {
+                    Log.d("PSQL", ex.getLocalizedMessage());
+                    showError(ex.getLocalizedMessage());
+                }
+
+                ListAdapter adapter = new ArrayAdapter<String>(this, R.layout.list_item, nameList);
+                listView.setAdapter(adapter);
+
+                if (!found)
+                {
+                    questionView.setText("Ждём вопроса");
+                    timer.start();
+                }
+            }
+            else
+            {
+                questionView.setText("Ошибка соединения с сервером");
+            }
+        }
+    }
+
+    private Connection getConnection()
+    {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+        String host = prefs.getString("host", "192.168.1.25");
+        String port = prefs.getString("port", "5432");
+        String dbName = prefs.getString("dbName", "BLADERUNNER");
+        String url = "jdbc:postgresql://" + host + ":" + port + "/" + dbName;
+        String user = prefs.getString("user", "blademaster");
+        String passwd = prefs.getString("passwd", "");
+        Properties props = new Properties();
+        props.setProperty("user", user);
+        props.setProperty("password", passwd);
+        Connection conn = null;
+        try
+        {
+            conn = DriverManager.getConnection(url, props);
+        }
+        catch (Throwable ex)
+        {
+            Log.d("PSQL", ex.getLocalizedMessage());
+            showError(ex.getLocalizedMessage());
+        }
+
+        return conn;
     }
 
     public void onResume()
     {
         super.onResume();
-        String url = "jdbc:postgresql://cats-shadow.spb.ru:5432/BLADERUNNER";
-        Properties props = new Properties();
-        props.setProperty("user","blademaster");
-        props.setProperty("password","gfhjkm");
-        nameList.clear();
-        try
+
+        retrieve();
+    }
+
+    public void onPause()
+    {
+        synchronized (timer)
         {
-            Connection conn = DriverManager.getConnection(url, props);
-
-            Statement st = conn.createStatement();
-            ResultSet rs = st.executeQuery("SELECT NAME FROM PERSON");
-
-            while (rs.next())
-            {
-                nameList.add(rs.getString("NAME"));
-            }
+            timer.cancel();
         }
-        catch (SQLException ex)
-        {
-            Log.d("PSQL", ex.toString());
-        }
-
-        ListAdapter adapter = new ArrayAdapter<String>(this, R.layout.list_item, nameList);
-        setListAdapter(adapter);
+        super.onPause();
     }
 
     @Override
@@ -87,6 +236,9 @@ public class VKTest extends ListActivity {
         {
             case R.id.settings:
                 openSettings();
+                return true;
+            case R.id.refresh:
+                retrieve();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

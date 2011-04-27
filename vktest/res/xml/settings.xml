@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <EditTextPreference android:key="dbHost" android:title="Host" android:defaultValue=""/>
-    <EditTextPreference android:key="dbPort" android:title="Port" android:defaultValue="5432"/>
+    <EditTextPreference android:key="host" android:title="Host" android:defaultValue=""/>
+    <EditTextPreference android:key="port" android:title="Port" android:defaultValue="5432"/>
     <EditTextPreference android:key="dbName" android:title="Name" android:defaultValue="BLADERUNNER"/>
-    <EditTextPreference android:key="dbUser" android:title="User" android:defaultValue="blademaster"/>
-    <EditTextPreference android:key="dbPasswd" android:title="Password" android:defaultValue="" android:password="true"/>
+    <EditTextPreference android:key="user" android:title="User" android:defaultValue="blademaster"/>
+    <EditTextPreference android:key="passwd" android:title="Password" android:defaultValue="" android:password="true"/>
+    <EditTextPreference android:key="deviceId" android:title="Device ID" android:defaultValue="1"/>
 </PreferenceScreen>

@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="vertical"
               android:layout_width="fill_parent"
               android:layout_height="fill_parent">
-    <ListView android:id="@+id/listview"
+    <TextView
+        android:id="@+id/textHeader"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="Connect to database"/>
+    <ListView android:id="@+id/list"
               android:layout_width="fill_parent"
-              android:layout_height="fill_parent"/>
+              android:layout_height="wrap_content"
+              android:dividerHeight="5dp"/>
 </LinearLayout>
