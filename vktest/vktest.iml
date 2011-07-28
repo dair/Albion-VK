@@ -3,7 +3,7 @@
   <component name="FacetManager">
     <facet type="android" name="Android">
       <configuration>
-        <option name="PLATFORM_NAME" value="Android 1.5 Platform" />
+        <option name="PLATFORM_NAME" value="Android 2.1-update1 Platform" />
         <option name="GEN_FOLDER_RELATIVE_PATH_APT" value="/gen" />
         <option name="GEN_FOLDER_RELATIVE_PATH_AIDL" value="/gen" />
         <option name="MANIFEST_FILE_RELATIVE_PATH" value="/AndroidManifest.xml" />
@@ -32,8 +32,19 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" scope="PROVIDED" name="Android 1.5 Platform" level="application" />
-    <orderEntry type="library" name="postgresql-8.4-702.jdbc3.jar" level="project" />
+    <orderEntry type="library" name="Android 2.1-update1 Platform" level="application" />
+    <orderEntry type="module-library">
+      <library name="postgresql-9.0-801.jdbc4.jar">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/.." />
+          <root url="file://$MODULE_DIR$/.." />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+        <jarDirectory url="file://$MODULE_DIR$/.." recursive="false" />
+      </library>
+    </orderEntry>
+    <orderEntry type="library" scope="PROVIDED" name="Android 2.1-update1 Platform" level="application" />
   </component>
 </module>
 
